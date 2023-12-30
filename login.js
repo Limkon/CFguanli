@@ -1,76 +1,89 @@
-const fs = require('fs');
-const puppeteer = require('puppeteer');
+const fetch = require('node-fetch');
+const fs = require('fs').promises;
 
-(async () => {
-  // 读取 accounts.json 文件中的 JSON 字符串
-  const accountsJson = fs.readFileSync('accounts.json', 'utf-8');
-  const accounts = JSON.parse(accountsJson);
+const apiKey = '46ff5ad70aca8568480196b16e44358c48902';
+const email = 'Kevlin2002@yahoo.com';
+const zoneId = '8c2dc06d8469d0edcfee9e0718680a3b';
+const targetName = 'yx.ssie.link';
 
-  for (const account of accounts) {
-    const { username, password } = account;
+async function getIPAddressesFromFile() {
+  try {
+    const data = await fs.readFile('iplist.txt', 'utf-8');
+    return data.split('\n').filter(Boolean);
+  } catch (error) {
+    console.error('Error reading IP list file:', error);
+    return [];
+  }
+}
 
-    const browser = await puppeteer.launch({ headless: false });
-    const page = await browser.newPage();
+async function deleteAllARecordsByName(name) {
+  try {
+    const response = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records?type=A&name=${name}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Auth-Email': email,
+        'X-Auth-Key': apiKey
+      }
+    });
+
+    const data = await response.json();
+    for (const record of data.result) {
+      const deleteResponse = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${record.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Auth-Email': email,
+          'X-Auth-Key': apiKey
+        }
+      });
+      const deleteData = await deleteResponse.json();
+      console.log(`Deleted A record with ID ${record.id}`);
+    }
+  } catch (error) {
+    console.error('Error deleting A records:', error);
+  }
+}
+
+async function addIPsToDNS(ipAddresses) {
+  await deleteAllARecordsByName(targetName);
+
+  for (const ip of ipAddresses) {
+    const url = `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`;
+    const body = {
+      type: 'A',
+      name: targetName,
+      content: ip,
+      ttl: 120,
+      proxied: true
+    };
 
     try {
-      await page.goto('https://www.cloudns.net/index/show/login/');
-
-      // 等待页面加载完成
-      await page.waitForTimeout(10000); // 增加等待时间，等待页面加载完全
-
-      // 清空邮箱和密码输入框的原有值
-      const emailInput = await page.$('#login2FAMail');
-      const passwordInput = await page.$('#login2FAPassword');
-      if (emailInput && passwordInput) {
-        await emailInput.click({ clickCount: 3 }); // 选中输入框的内容
-        await emailInput.press('Backspace'); // 删除原有值
-        await passwordInput.click({ clickCount: 3 }); // 选中输入框的内容
-        await passwordInput.press('Backspace'); // 删除原有值
-      }
-
-      // 输入实际的用户名和密码
-      await page.type('#login2FAMail', username);
-      await page.type('#login2FAPassword', password);
-
-      // 提交登录表单
-      const loginButton = await page.$('#login2faButton');
-      if (loginButton) {
-        await loginButton.click();
-      } else {
-        throw new Error('无法找到登录按钮');
-      }
-
-      // 等待登录成功（如果有跳转页面的话）
-      await page.waitForNavigation();
-
-      // 判断是否登录成功
-      const isLoggedIn = await page.evaluate(() => {
-        const loginButton = document.querySelector('.button-loading[title="载入中..."]');
-        return loginButton === null;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Auth-Email': email,
+          'X-Auth-Key': apiKey
+        },
+        body: JSON.stringify(body)
       });
 
-      if (isLoggedIn) {
-        console.log(`账号 ${username} 登录成功！`);
-      } else {
-        console.error(`账号 ${username} 登录失败，请检查账号和密码是否正确。`);
-      }
+      const data = await response.json();
+      console.log('Response:', data);
     } catch (error) {
-      console.error(`账号 ${username} 登录时出现错误: ${error}`);
-    } finally {
-      // 关闭页面和浏览器
-      await page.close();
-      await browser.close();
-
-      // 用户之间添加随机延时
-      const delay = Math.floor(Math.random() * 5000) + 1000; // 随机延时1秒到6秒之间
-      await delayTime(delay);
+      console.error('Error adding A record:', error);
     }
   }
-
-  console.log('所有账号登录完成！');
-})();
-
-// 自定义延时函数
-function delayTime(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+async function startProcess() {
+  const ipAddresses = await getIPAddressesFromFile();
+  if (ipAddresses.length > 0) {
+    await addIPsToDNS(ipAddresses);
+  } else {
+    console.log('No IP addresses found in the file.');
+  }
+}
+
+startProcess();
