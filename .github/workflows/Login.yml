@@ -30,4 +30,4 @@ jobs:
 
       - name: Login to website
         run: |
-          xvfb-run --server-args="-screen 0 1280x1024x24" node login.js
+          xvfb-run --server-args="-screen 0 1280x1024x24" node delcf.js
