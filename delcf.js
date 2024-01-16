@@ -3,7 +3,7 @@ const fetch = require('node-fetch');
 const fs = require('fs').promises;
 
 // Define the Cloudflare API key, email, and zone ID.
-const apiKey = 'dBXlIdcd0x6fD-cRA_oqFLf96qsHjmhbkM7YApYU';
+const apiKey = 'YDSt9IyDDN4YOw5Phdyi1m_BAzcvToBTkuRsZ18W';
 const email = 'Kevlin2002@yahoo.com';
 const zoneId = '19d7a265c5f903edf66369654314a459';
 
